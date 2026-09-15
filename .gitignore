@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/
+
+# Models downloaded at build time
+backend/models/*.task
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
