@@ -1,36 +1,34 @@
 # Deploying to Hetzner
 
-## One-time server setup (API server)
+## Production server
 
-1. Create a server in **Nuremberg** (shared vCPU, 4 vCPU / 8 GB is plenty to start), Ubuntu 24.04, with your SSH key.
-2. Attach a **Hetzner Cloud Firewall**: allow TCP 80, 443 and UDP 443 from anywhere; TCP 22 only from your IP.
-3. In Cloudflare DNS for `talentoafrica.com`, add A/AAAA records `api` → the server's IPv4/IPv6.
-   Keep them **DNS only** (grey cloud) so Caddy can get its own certificate, or proxy them and set
-   SSL/TLS mode to **Full (strict)**.
-4. On the server:
+| | |
+|---|---|
+| Server | `talento-api-1`, Hetzner CX23 (2 vCPU, 4 GB), Nuremberg, Ubuntu 26.04 |
+| IPv4 / IPv6 | `91.98.226.51` / `2a01:4f8:c0c:77a7::1` |
+| Firewall | `firewall-1`: inbound TCP 22, 80, 443 and ICMP |
+| DNS | `api.talentoafrica.com` A record in Cloudflare, **DNS only** (Caddy issues the certificate) |
+| Access | `ssh talento-api` (user `deploy`, key `~/.ssh/talento_hetzner`); root with the same key for apt |
+| App dir | `/opt/talento` (`.env`, compose file, Caddyfile, `src/` checkout) |
 
-   ```bash
-   apt-get update && apt-get install -y docker.io docker-compose-v2
-   adduser --disabled-password deploy && usermod -aG docker deploy
-   mkdir -p /opt/talento && chown deploy:deploy /opt/talento
-   ```
-
-5. Copy `docker-compose.prod.yml` and `Caddyfile` into `/opt/talento/`, and create `/opt/talento/.env`
-   from `../.env.example` with production values (`chmod 600`).
-6. Log in to GHCR once as `deploy` with a read-only token:
-   `echo <token> | docker login ghcr.io -u <github-user> --password-stdin`
+First boot ran a cloud-init script that installed Docker, fail2ban and unattended upgrades, created
+the `deploy` user, added 2 GB swap and disabled SSH password login. `docker-buildx` was installed
+afterwards so the Dockerfile's BuildKit cache mounts work.
 
 ## Deploy
 
 ```bash
-cd /opt/talento
-docker compose -f docker-compose.prod.yml --env-file .env pull
-docker compose -f docker-compose.prod.yml --env-file .env up -d
-curl -fsS https://$API_DOMAIN/readyz
+scripts/deploy.sh
 ```
 
-CI builds and pushes `ghcr.io/ferris-hq/talento-api` on every push to `main`. A deploy workflow that runs
-the commands above over SSH gets added once the server exists.
+Syncs the compose file and Caddyfile, pulls `main` into `/opt/talento/src`, builds `talento-api:local`
+on the server, restarts the stack and waits for `https://api.talentoafrica.com/readyz`.
+
+Secrets live only in `/opt/talento/.env` on the server (mode 600). Edit them there, then rerun the deploy.
+
+CI also pushes `ghcr.io/ferris-hq/talento-api` on every push to `main`. To pull that instead of
+building on the server, make the package public or `docker login ghcr.io` on the server, and set
+`API_IMAGE` in the server `.env`.
 
 ## Database migrations
 
