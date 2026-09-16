@@ -1,0 +1,10 @@
+<!-- Supabase Auth > Emails > Magic link. Subject: Your Talento sign-in code: {{ .Token }} -->
+<div style="background:#F5F5F5;padding:32px 16px;font-family:'Nunito Sans',Helvetica,Arial,sans-serif;color:#080A0C">
+  <div style="max-width:440px;margin:0 auto;background:#FFFFFF;border-radius:28px;padding:32px">
+    <p style="margin:0 0 24px;font-weight:800;font-size:14px;letter-spacing:1px">TALENTO</p>
+    <h1 style="margin:0 0 8px;font-size:26px;line-height:32px;font-weight:800">Your sign-in code</h1>
+    <p style="margin:0 0 24px;font-size:15px;line-height:22px;color:#6B6B6B">Enter this code in the Talento app to sign in.</p>
+    <p style="margin:0 0 24px;background:#FFD423;border-radius:20px;padding:18px;text-align:center;font-size:34px;font-weight:800;letter-spacing:8px">{{ .Token }}</p>
+    <p style="margin:0;font-size:13px;line-height:20px;color:#9A9A9A">The code expires in 1 hour. If you didn't try to sign in, you can ignore this email.</p>
+  </div>
+</div>
