@@ -222,8 +222,8 @@ select pg_temp.expect(
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000c001');
 select pg_temp.expect(
-  public.is_verified_coach(),
-  'is_verified_coach() is true for the approved coach'
+  private.is_verified_coach(),
+  'private.is_verified_coach() is true for the approved coach'
 );
 select pg_temp.expect(
   exists (select 1 from public.athlete_profiles where profile_id = '00000000-0000-0000-0000-00000000a001'),
@@ -242,6 +242,22 @@ select pg_temp.expect_denied(
   $$select 1 from public.profiles limit 1$$,
   'anonymous requests cannot read profiles'
 );
+
+-- ---- helpers are not callable anonymously -----------------------------------------------------
+
+select pg_temp.act_as_service();
+set local role anon;
+select pg_temp.expect_denied(
+  $$select private.is_admin()$$,
+  'anonymous requests cannot call private helpers'
+);
+reset role;
+select pg_temp.act_as('00000000-0000-0000-0000-00000000a002');
+select pg_temp.expect_denied(
+  $$select public.handle_new_user()$$,
+  'signed-in users cannot call trigger functions directly'
+);
+reset role;
 
 -- ---- age group helper ------------------------------------------------------------------------
 

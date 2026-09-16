@@ -58,5 +58,7 @@ supabase db reset       # applies supabase/migrations
 
 ## Deploying
 
-- Migrations: `supabase link --project-ref <ref>` then `supabase db push`.
+- Migrations: the staging project is `enfjewgjjaflwrmeucmb` (Telento, eu-central-1).
+  Apply with `supabase link --project-ref enfjewgjjaflwrmeucmb && supabase db push`, or through the
+  Supabase MCP. Keep local filenames equal to the versions in `supabase_migrations.schema_migrations`.
 - API: see [`infra/README.md`](infra/README.md).

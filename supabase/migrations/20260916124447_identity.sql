@@ -22,7 +22,7 @@ create type public.verification_request_status as enum ('pending', 'approved', '
 -- ---------------------------------------------------------------------------------------------
 
 create function public.set_updated_at() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   new.updated_at = now();
   return new;
@@ -31,7 +31,7 @@ $$;
 
 -- True for FastAPI (service_role JWT) and for direct database sessions (migrations, psql, cron).
 create function public.is_service_request() returns boolean
-language sql stable as $$
+language sql stable set search_path = '' as $$
   select coalesce(auth.role(), 'anon') = 'service_role'
       or current_setting('request.jwt.claims', true) is null
       or current_setting('request.jwt.claims', true) = ''
@@ -40,7 +40,7 @@ $$;
 -- Age group labels used by the app: U-13, U-15, U-17, U-19, U-21, Senior.
 -- Stored on athlete_profiles and refreshed by refresh_athlete_age_groups() as birthdays pass.
 create function public.age_group_for(p_dob date, p_on date default current_date) returns text
-language sql immutable as $$
+language sql immutable set search_path = '' as $$
   select case
     when p_dob is null then null
     when extract(year from age(p_on, p_dob)) < 13 then 'U-13'
@@ -87,7 +87,7 @@ create trigger on_auth_user_created after insert on auth.users
 
 -- Users pick athlete or coach once. Admin is granted only by the service role.
 create function public.guard_profile_role() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   if new.role is distinct from old.role and not public.is_service_request() then
     if old.role is not null then
