@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# API image. Workers (ffmpeg + MediaPipe) get their own image in phase 3.
+# One image for the API (uvicorn) and the video worker (arq + ffmpeg).
 
 FROM python:3.12-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -16,9 +16,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
 FROM base AS runtime
-RUN groupadd --system app && useradd --system --gid app --home /srv app
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system app && useradd --system --gid app --home /srv app
 COPY --from=deps /opt/venv /opt/venv
 COPY app ./app
+COPY worker ./worker
 ENV PATH="/opt/venv/bin:$PATH"
 USER app
 EXPOSE 8000

@@ -25,6 +25,23 @@ class Settings(BaseSettings):
         description="Postgres connection string (Supabase pooler, session mode) for the service.",
     )
 
+    # Cloudflare R2
+    r2_endpoint: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket_raw: str = "talento-raw"
+    r2_bucket_media: str = "talento-media"
+    r2_bucket_private: str = "talento-private"
+    r2_public_base_url: str = "https://media.talentoafrica.com"
+
+    # Background jobs
+    redis_url: str = "redis://localhost:6379"
+
+    # Upload limits
+    max_library_videos: int = 10
+    max_upload_bytes: int = 300 * 1024 * 1024
+    max_video_seconds: int = 90
+
     # HTTP
     cors_origins: list[str] = Field(default_factory=list)
 

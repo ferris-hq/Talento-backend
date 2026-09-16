@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import create_pool
-from app.routers import health, me
+from app.routers import health, me, videos
+from app.services.jobs import create_queue
 
 logger = logging.getLogger("talento")
 
@@ -21,9 +22,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.db_pool = await create_pool(settings.database_url)
     else:
         logger.warning("DATABASE_URL is not set; database-backed endpoints will return 503")
+    app.state.queue = None
+    try:
+        app.state.queue = await create_queue()
+    except Exception:
+        logger.warning("Redis is unreachable; uploads can't be queued until it is")
     try:
         yield
     finally:
+        if app.state.queue is not None:
+            await app.state.queue.aclose()
         if app.state.db_pool is not None:
             await app.state.db_pool.close()
 
@@ -57,6 +65,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(me.router)
+    app.include_router(videos.router)
     return app
 
 

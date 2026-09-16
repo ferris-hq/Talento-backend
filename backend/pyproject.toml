@@ -11,6 +11,8 @@ dependencies = [
   "asyncpg>=0.30",
   "httpx>=0.28",
   "sentry-sdk[fastapi]>=2.19",
+  "boto3>=1.43.95",
+  "arq>=0.26",
 ]
 
 [dependency-groups]
@@ -34,4 +36,7 @@ select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "RUF"]
 ignore = ["S101"]  # asserts are fine in tests
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S105", "S106"]
+"tests/**" = ["S105", "S106", "S603", "S607"]
+# SQL is built only from the constant VIDEO_COLUMNS; values always go through $n parameters.
+"app/routers/videos.py" = ["S608"]
+"worker/media.py" = ["S404", "S603", "S607"]
