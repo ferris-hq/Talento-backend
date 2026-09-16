@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from app.config import Settings, get_settings
 from app.db import DbConnection
 from app.deps.auth import CurrentUser
-from app.services import jobs, storage
+from app.services import cdn, jobs, storage
 
 router = APIRouter(prefix="/v1", tags=["videos"])
 
@@ -262,4 +262,8 @@ async def delete_video(
         storage.delete_objects, settings.r2_bucket_media, [row["playback_key"], row["poster_key"]]
     )
     await db.execute("delete from public.videos where id = $1", video_id)
+    # Otherwise the edge keeps serving the deleted clip until its cache expires.
+    await cdn.purge(
+        [storage.public_url(row["playback_key"]), storage.public_url(row["poster_key"])], settings
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

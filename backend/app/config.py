@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     r2_bucket_media: str = "talento-media"
     r2_bucket_private: str = "talento-private"
     r2_public_base_url: str = "https://media.talentoafrica.com"
+    # Purges deleted media from Cloudflare's edge cache (token needs Zone > Cache Purge).
+    cloudflare_zone_id: str | None = None
+    cloudflare_api_token: str | None = None
 
     # Background jobs
     redis_url: str = "redis://localhost:6379"
