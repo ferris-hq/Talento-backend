@@ -7,7 +7,7 @@ API, video processing and database for the [Talento app](https://github.com/ferr
 | Database, auth, realtime | Supabase (Postgres + RLS) | Supabase Cloud, `eu-central-1` |
 | API | FastAPI (Python 3.12) | Hetzner, behind Caddy |
 | Video + pose workers | arq, ffmpeg, MediaPipe Pose *(phase 3–4)* | Hetzner dedicated vCPU |
-| Video files | Cloudflare R2 *(phase 3)* | Cloudflare |
+| Video files | Cloudflare R2 (`talento-raw`, `talento-media` → `media.talentoafrica.com`, `talento-private`) | Cloudflare |
 
 The full roadmap lives in [`docs/PLAN.md`](docs/PLAN.md).
 

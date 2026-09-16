@@ -4,7 +4,9 @@
 
 1. Create a server in **Nuremberg** (shared vCPU, 4 vCPU / 8 GB is plenty to start), Ubuntu 24.04, with your SSH key.
 2. Attach a **Hetzner Cloud Firewall**: allow TCP 80, 443 and UDP 443 from anywhere; TCP 22 only from your IP.
-3. Point `API_DOMAIN` (e.g. `api.talento.app`) at the server's IPv4/IPv6 with A/AAAA records.
+3. In Cloudflare DNS for `talentoafrica.com`, add A/AAAA records `api` → the server's IPv4/IPv6.
+   Keep them **DNS only** (grey cloud) so Caddy can get its own certificate, or proxy them and set
+   SSL/TLS mode to **Full (strict)**.
 4. On the server:
 
    ```bash
