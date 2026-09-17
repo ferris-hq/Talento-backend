@@ -25,16 +25,16 @@ def test_clip_without_a_person_is_unrated(tmp_path: Path) -> None:
          "-t", "3", "-pix_fmt", "yuv420p", str(clip)],
         check=True,
     )  # fmt: skip
-    result = analyze.run(clip, 3)
+    result = analyze.run(clip)
     assert result.status == "unrated"
     assert "couldn't see an athlete" in result.reason
-    assert result.quality["frames"] >= 40
+    assert result.quality["frames"] >= 30  # 3 s at 12 Hz
 
 
 @pytest.mark.skipif(not os.environ.get("POSE_SAMPLE_VIDEO"), reason="POSE_SAMPLE_VIDEO not set")
 def test_sample_clip_is_rated() -> None:
     clip = Path(os.environ["POSE_SAMPLE_VIDEO"])
-    result = analyze.run(clip, 10)
+    result = analyze.run(clip)
     assert result.status == "done", result.reason
     assert 0 < result.overall <= 10
     assert len(result.scores) >= 5

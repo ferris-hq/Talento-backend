@@ -31,7 +31,10 @@ COPY --from=deps /opt/venv /opt/venv
 COPY app ./app
 COPY worker ./worker
 COPY --from=model /pose_landmarker_full.task ./models/pose_landmarker_full.task
-ENV PATH="/opt/venv/bin:$PATH"
+ENV PATH="/opt/venv/bin:$PATH" \
+    # MediaPipe imports matplotlib; give it (and fontconfig) a writable cache instead of $HOME.
+    MPLCONFIGDIR=/tmp/matplotlib \
+    XDG_CACHE_HOME=/tmp/cache
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \

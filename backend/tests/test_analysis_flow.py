@@ -59,8 +59,8 @@ async def ready_video(pool: asyncpg.Pool) -> tuple[str, str]:
 
 
 def fake_run(result: analyze.Analysis):
-    def run(clip: Path, duration: float) -> analyze.Analysis:
-        assert clip.exists() and duration == 12
+    def run(clip: Path) -> analyze.Analysis:
+        assert clip.exists()
         return result
 
     return run
@@ -110,7 +110,7 @@ async def test_rated_clip_updates_video_and_stores_analysis(pool, monkeypatch) -
 async def test_errors_retry_then_mark_failed(pool, monkeypatch) -> None:
     _, video_id = await ready_video(pool)
 
-    def boom(clip: Path, duration: float):
+    def boom(clip: Path):
         raise RuntimeError("model crashed")
 
     monkeypatch.setattr(analyze, "run", boom)

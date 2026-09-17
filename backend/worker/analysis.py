@@ -11,7 +11,6 @@ from arq import Retry
 
 from app.config import get_settings
 from app.services import storage
-from worker import media
 from worker.pose import analyze
 
 log = logging.getLogger("talento.worker.analysis")
@@ -70,7 +69,7 @@ async def analyze_video(ctx: dict, video_id: str) -> str:
     pool: asyncpg.Pool = ctx["db"]
     settings = get_settings()
     row = await pool.fetchrow(
-        """select owner_id::text, status::text as status, playback_key, duration_s
+        """select owner_id::text, status::text as status, playback_key
              from public.videos where id = $1""",
         video_id,
     )
@@ -83,11 +82,7 @@ async def analyze_video(ctx: dict, video_id: str) -> str:
         with tempfile.TemporaryDirectory(prefix="talento-pose-") as tmp:
             clip = Path(tmp) / "720.mp4"
             await to_thread.run_sync(_download, settings.r2_bucket_media, row["playback_key"], clip)
-            duration = (
-                float(row["duration_s"] or 0)
-                or (await to_thread.run_sync(media.probe, clip)).duration_s
-            )
-            result = await to_thread.run_sync(analyze.run, clip, duration)
+            result = await to_thread.run_sync(analyze.run, clip)
     except Exception:
         log.exception("analysis of %s failed (try %s)", video_id, ctx.get("job_try"))
         if ctx.get("job_try", 1) < MAX_TRIES:

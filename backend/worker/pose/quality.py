@@ -36,7 +36,7 @@ def check(series: PoseSeries) -> Quality:
     det_ratio = float(detected.mean()) if frames else 0.0
     full_body = float(full_body_mask(series).mean()) if frames else 0.0
     visibility = float(np.nanmean(series.image[detected][:, BODY, 3])) if detected.any() else 0.0
-    brightness = float(series.brightness.mean()) if frames else 0.0
+    brightness = float(np.nanmean(series.brightness)) if frames else 0.0
     stats = {
         "frames": frames,
         "sample_fps": round(series.fps, 1),

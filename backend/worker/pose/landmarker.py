@@ -16,6 +16,10 @@ MODEL_PATH = Path(
     )
 )
 MAX_POSES = 3  # a few people may be in frame; we follow one of them
+# Metrics use derivatives, which depend on the sampling rate, so every clip is analysed on the
+# same fixed timeline whatever its source frame rate.
+ANALYSIS_FPS = 12.0
+MAX_BLEND_GAP_S = 0.2
 
 
 @dataclass
@@ -41,9 +45,19 @@ class PoseSeries:
         return ~np.isnan(self.image[:, 0, 0])
 
 
-def sample_fps(duration_s: float) -> float:
-    """Short clips get denser sampling; long ones stay within the CPU budget."""
-    return 15.0 if duration_s <= 30 else 10.0
+def _resample(times: np.ndarray, values: np.ndarray, grid: np.ndarray) -> np.ndarray:
+    """Linear interpolation onto `grid` between detected neighbours; NaN across long gaps."""
+    out = np.full((len(grid), *values.shape[1:]), np.nan)
+    right = np.clip(np.searchsorted(times, grid), 1, len(times) - 1)
+    left = right - 1
+    t0, t1 = times[left], times[right]
+    w = np.clip((grid - t0) / np.maximum(t1 - t0, 1e-9), 0, 1)
+    v0, v1 = values[left], values[right]
+    shape = (-1,) + (1,) * (values.ndim - 1)
+    blended = v0 * (1 - w).reshape(shape) + v1 * w.reshape(shape)
+    ok = (t1 - t0 <= MAX_BLEND_GAP_S).reshape(shape)
+    out[:] = np.where(ok, blended, np.nan)
+    return out
 
 
 def _bbox(landmarks) -> tuple[float, float, float, float]:
@@ -78,14 +92,15 @@ def _pick(result, previous_box):
     return int(np.argmax([_area(b) for b in boxes]))
 
 
-def extract(video: Path, duration_s: float, model_path: Path = MODEL_PATH) -> PoseSeries:
+def extract(video: Path, model_path: Path = MODEL_PATH) -> PoseSeries:
     capture = cv2.VideoCapture(str(video))
     if not capture.isOpened():
         raise ValueError(f"cannot open {video}")
     source_fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
     width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    step = max(1, round(source_fps / sample_fps(duration_s)))
+    # Sample at least ANALYSIS_FPS, then resample exactly onto the analysis timeline.
+    step = max(1, int(source_fps // ANALYSIS_FPS))
 
     options = vision.PoseLandmarkerOptions(
         base_options=BaseOptions(
@@ -137,12 +152,25 @@ def extract(video: Path, duration_s: float, model_path: Path = MODEL_PATH) -> Po
             index += 1
     capture.release()
 
+    if len(times) < 2:
+        return PoseSeries(
+            times=np.array(times),
+            image=np.array(image_rows).reshape(-1, 33, 4),
+            world=np.array(world_rows).reshape(-1, 33, 3),
+            brightness=np.array(brightness),
+            width=width,
+            height=height,
+            crowded_frames=crowded,
+        )
+    t = np.array(times)
+    grid = np.arange(t[0], t[-1] + 1e-9, 1 / ANALYSIS_FPS)
+    crowded_share = crowded / len(t)
     return PoseSeries(
-        times=np.array(times),
-        image=np.array(image_rows) if image_rows else np.empty((0, 33, 4)),
-        world=np.array(world_rows) if world_rows else np.empty((0, 33, 3)),
-        brightness=np.array(brightness),
+        times=grid,
+        image=_resample(t, np.array(image_rows), grid),
+        world=_resample(t, np.array(world_rows), grid),
+        brightness=_resample(t, np.array(brightness), grid),
         width=width,
         height=height,
-        crowded_frames=crowded,
+        crowded_frames=round(crowded_share * len(grid)),
     )

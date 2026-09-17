@@ -24,9 +24,9 @@ def _clean(values: dict[str, float]) -> dict[str, float | None]:
     return {k: (None if math.isnan(v) else round(v, 4)) for k, v in values.items()}
 
 
-def run(video: Path, duration_s: float) -> Analysis:
+def run(video: Path) -> Analysis:
     started = time.monotonic()
-    series = landmarker.extract(video, duration_s)
+    series = landmarker.extract(video)
     q = quality.check(series)
     if not q.ok:
         result = Analysis("unrated", q.reason, q.stats)

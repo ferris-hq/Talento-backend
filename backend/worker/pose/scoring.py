@@ -19,15 +19,17 @@ class Prior:
     higher_is_better: bool = True
 
 
+# Calibrated on transcoded reference clips (what the worker analyses): mid = median and
+# scale ~ interquartile range / 1.5, so the middle half of those clips lands between ~33 and ~67.
 PRIORS: dict[str, Prior] = {
-    "speed": Prior(1.2, 0.45),  # hip speed p90, torso lengths/s
-    "agility": Prior(4.5, 2.0),  # horizontal acceleration p90, torso lengths/s²
-    "explosiveness": Prior(1.1, 0.45),  # upward hip velocity p97
-    "balance": Prior(0.16, 0.07, higher_is_better=False),  # hip sway over the feet when still
-    "coordination": Prior(52.0, 10.0, higher_is_better=False),  # limb jerk / speed
-    "symmetry": Prior(0.86, 0.04),  # 1 - left/right range difference
-    "mobility": Prior(68.0, 12.0),  # knee/hip/shoulder range, degrees
-    "work_rate": Prior(0.8, 0.1),  # share of time moving
+    "speed": Prior(1.2, 0.6),  # hip speed p90, torso lengths/s
+    "agility": Prior(4.3, 2.3),  # horizontal acceleration p90, torso lengths/s²
+    "explosiveness": Prior(1.1, 0.5),  # upward hip velocity p97
+    "balance": Prior(0.14, 0.055, higher_is_better=False),  # hip sway over the feet when still
+    "coordination": Prior(47.0, 5.0, higher_is_better=False),  # limb jerk / speed
+    "symmetry": Prior(0.85, 0.035),  # 1 - left/right range difference
+    "mobility": Prior(72.0, 18.0),  # knee/hip/shoulder range, degrees
+    "work_rate": Prior(0.82, 0.13),  # share of time moving
 }
 
 SKILL_LABELS = {
@@ -49,7 +51,8 @@ def skill_score(name: str, value: float) -> int | None:
     z = (value - prior.mid) / prior.scale
     if not prior.higher_is_better:
         z = -z
-    return round(100 / (1 + math.exp(-z)))
+    # Never 0 or 100: the curve only says how this clip compares with typical ones.
+    return min(99, max(1, round(100 / (1 + math.exp(-z)))))
 
 
 def score(metrics: dict[str, float]) -> tuple[dict[str, int], float | None]:
