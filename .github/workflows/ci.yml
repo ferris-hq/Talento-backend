@@ -55,6 +55,11 @@ jobs:
           enable-cache: true
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - run: uv sync --frozen
+      - name: Pose model
+        run: |
+          mkdir -p models
+          curl -sSfL -o models/pose_landmarker_full.task \
+            https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - name: Prepare integration database

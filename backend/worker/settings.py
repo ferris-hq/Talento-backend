@@ -7,6 +7,7 @@ from arq.connections import RedisSettings
 
 from app.config import get_settings
 from app.db import create_pool
+from worker.analysis import analyze_video
 from worker.tasks import process_video
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -24,7 +25,7 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [process_video]  # noqa: RUF012 - arq reads class attributes
+    functions = [process_video, analyze_video]  # noqa: RUF012 - arq reads class attributes
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

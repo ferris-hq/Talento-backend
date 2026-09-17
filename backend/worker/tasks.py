@@ -10,7 +10,7 @@ from anyio import to_thread
 from arq import Retry
 
 from app.config import get_settings
-from app.services import storage
+from app.services import jobs, storage
 from worker import media
 
 log = logging.getLogger("talento.worker")
@@ -100,7 +100,8 @@ async def process_video(ctx: dict, video_id: str) -> str:
         """update public.videos
               set status = 'ready', playback_key = $2, poster_key = $3,
                   duration_s = $4, width = $5, height = $6, sha256 = $7,
-                  reject_reason = null, ready_at = now()
+                  reject_reason = null, ready_at = now(),
+                  analysis_status = 'pending', analysis_note = null, rating = null
             where id = $1 and status = 'processing'
         returning id""",
         video_id,
@@ -118,4 +119,7 @@ async def process_video(ctx: dict, video_id: str) -> str:
         )
         return "discarded"
     log.info("video %s ready (%.1fs %sx%s)", video_id, final.duration_s, width, height)
+    # Rating runs as its own job so the clip is playable straight away.
+    if (redis := ctx.get("redis")) is not None:
+        await jobs.enqueue_analyze_video(redis, video_id)
     return "ready"

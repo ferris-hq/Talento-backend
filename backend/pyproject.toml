@@ -13,6 +13,9 @@ dependencies = [
   "sentry-sdk[fastapi]>=2.19",
   "boto3>=1.43.95",
   "arq>=0.26",
+  "mediapipe==0.10.21",
+  "numpy>=1.26,<2",
+  "scipy>=1.13",
 ]
 
 [dependency-groups]
