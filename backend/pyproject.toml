@@ -16,6 +16,7 @@ dependencies = [
   "mediapipe==0.10.21",
   "numpy>=1.26,<2",
   "scipy>=1.13",
+  "pillow>=11",
 ]
 
 [dependency-groups]
@@ -40,6 +41,7 @@ ignore = ["S101"]  # asserts are fine in tests
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S603", "S607"]
-# SQL is built only from the constant VIDEO_COLUMNS; values always go through $n parameters.
+# SQL is built only from constant column lists; values always go through $n parameters.
 "app/routers/videos.py" = ["S608"]
+"app/routers/trials.py" = ["S608"]
 "worker/media.py" = ["S404", "S603", "S607"]

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import create_pool
-from app.routers import health, me, videos
+from app.routers import health, me, trials, videos
 from app.services.jobs import create_queue
 
 logger = logging.getLogger("talento")
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(me.router)
     app.include_router(videos.router)
+    app.include_router(trials.router)
     return app
 
 
