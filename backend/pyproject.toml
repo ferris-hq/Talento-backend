@@ -44,4 +44,5 @@ ignore = ["S101"]  # asserts are fine in tests
 # SQL is built only from constant column lists; values always go through $n parameters.
 "app/routers/videos.py" = ["S608"]
 "app/routers/trials.py" = ["S608"]
+"app/routers/admin.py" = ["S608"]
 "worker/media.py" = ["S404", "S603", "S607"]

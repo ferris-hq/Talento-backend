@@ -23,6 +23,10 @@ create table if not exists auth.users (
   email text unique,
   phone text unique,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
+  -- Columns the admin API reads on the real Supabase auth.users.
+  last_sign_in_at timestamptz,
+  banned_until timestamptz,
+  email_confirmed_at timestamptz,
   created_at timestamptz not null default now()
 );
 
