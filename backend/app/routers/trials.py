@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.config import Settings, get_settings
 from app.db import DbConnection
 from app.deps.auth import CurrentUser
+from app.deps.limits import TrialLimit
 from app.services import cdn, images, storage
 
 router = APIRouter(prefix="/v1/trials", tags=["trials"])
@@ -231,7 +232,11 @@ async def create_flyer_upload(
 
 @router.post("", response_model=TrialOut, status_code=status.HTTP_201_CREATED)
 async def create_trial(
-    body: TrialCreate, user: CurrentUser, db: DbConnection, settings: SettingsDep
+    body: TrialCreate,
+    user: CurrentUser,
+    db: DbConnection,
+    settings: SettingsDep,
+    _limit: TrialLimit,
 ) -> TrialOut:
     organization = await _require_verified_coach(db, user.id)
     club_name = _clean(organization) or _clean(body.club_name)

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from app.config import Settings, get_settings
 from app.db import DbConnection
 from app.deps.auth import CurrentUser
+from app.deps.limits import DeleteAccountLimit
 from app.schemas.profile import AthleteSummary, CoachSummary, Me
 from app.services import cdn, storage
 
@@ -76,7 +77,9 @@ async def read_me(user: CurrentUser, db: DbConnection) -> Me:
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_me(user: CurrentUser, db: DbConnection, settings: SettingsDep) -> Response:
+async def delete_me(
+    user: CurrentUser, db: DbConnection, settings: SettingsDep, _limit: DeleteAccountLimit
+) -> Response:
     """Deletes the signed-in account and every file that belongs to it. There is no undo."""
     videos = await db.fetch(
         "select raw_key, playback_key, poster_key from public.videos where owner_id = $1", user.id

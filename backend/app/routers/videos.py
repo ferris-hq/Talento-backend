@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from app.config import Settings, get_settings
 from app.db import DbConnection
 from app.deps.auth import CurrentUser
+from app.deps.limits import CompleteLimit, UploadLimit
 from app.services import cdn, jobs, storage
 
 router = APIRouter(prefix="/v1", tags=["videos"])
@@ -126,7 +127,11 @@ async def _check_slots(db, user_id: UUID, settings: Settings) -> None:
 
 @router.post("/uploads", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def create_upload(
-    body: UploadRequest, user: CurrentUser, db: DbConnection, settings: SettingsDep
+    body: UploadRequest,
+    user: CurrentUser,
+    db: DbConnection,
+    settings: SettingsDep,
+    _limit: UploadLimit,
 ) -> UploadResponse:
     sport = await _require_athlete(db, user.id)
     content_type = body.content_type.lower()
@@ -176,6 +181,7 @@ async def complete_upload(
     user: CurrentUser,
     db: DbConnection,
     settings: SettingsDep,
+    _limit: CompleteLimit,
 ) -> VideoOut:
     row = await _own_video(db, video_id, user.id)
     if row["status"] != "uploading":
