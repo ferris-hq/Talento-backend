@@ -639,3 +639,16 @@ begin
   offset greatest(coalesce(p_offset, 0), 0);
 end;
 $$;
+
+-- ---------------------------------------------------------------------------------------------
+-- Realtime
+-- ---------------------------------------------------------------------------------------------
+
+-- The app listens for new notifications so the bell updates without a refresh. RLS still applies,
+-- so each person only receives their own.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    alter publication supabase_realtime add table public.notifications;
+  end if;
+end $$;
