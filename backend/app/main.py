@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.db_pool = None
     if settings.database_url:
-        app.state.db_pool = await create_pool(settings.database_url)
+        app.state.db_pool = await create_pool(settings.database_url, settings.db_pool_size)
     else:
         logger.warning("DATABASE_URL is not set; database-backed endpoints will return 503")
     app.state.queue = None

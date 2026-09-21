@@ -19,7 +19,7 @@ async def startup(ctx: dict) -> None:
     settings = get_settings()
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL is required for the worker")
-    ctx["db"] = await create_pool(settings.database_url)
+    ctx["db"] = await create_pool(settings.database_url, settings.db_pool_size)
 
 
 async def shutdown(ctx: dict) -> None:

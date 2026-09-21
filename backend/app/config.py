@@ -22,7 +22,17 @@ class Settings(BaseSettings):
     supabase_jwt_audience: str = "authenticated"
     database_url: str | None = Field(
         default=None,
-        description="Postgres connection string (Supabase pooler, session mode) for the service.",
+        description=(
+            "Postgres connection string for the service. Point this at Supabase's"
+            " transaction pooler (port 6543): the API opens many short-lived connections."
+        ),
+    )
+    db_pool_size: int = Field(
+        default=4,
+        description=(
+            "Connections per process. Multiplied by the uvicorn workers (and the video"
+            " worker), this has to stay under the pooler's client limit."
+        ),
     )
 
     # Cloudflare R2
