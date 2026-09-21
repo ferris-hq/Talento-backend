@@ -56,7 +56,8 @@ async def make_user(pool: asyncpg.Pool, role: str, name: str = "Test") -> str:
     )
     if role == "coach":
         await pool.execute(
-            """insert into public.coach_profiles (profile_id, organization_text, verification_status)
+            """insert into public.coach_profiles
+                 (profile_id, organization_text, verification_status)
                values ($1, 'Accra Lions', 'pending')""",
             user_id,
         )
@@ -83,7 +84,8 @@ async def test_coach_verification_and_trials(env, make_token) -> None:
     coach = await make_user(pool, "coach", "Coach Kwesi")
     auth = {"Authorization": f"Bearer {make_token(admin)}"}
     await pool.execute(
-        "insert into public.coach_verification_requests (coach_id, notes) values ($1, 'My club ID')",
+        "insert into public.coach_verification_requests (coach_id, notes)"
+        " values ($1, 'My club ID')",
         coach,
     )
     trial_id = uuid4()
@@ -223,3 +225,67 @@ async def test_video_takedown(env, make_token, fake_r2) -> None:
     assert row["reject_reason"] == "Someone else's footage"
     assert row["share_to_feed"] is False and row["playback_key"] is None and row["rating"] is None
     assert "v/y/720.mp4" in [key for _, keys in fake_r2 for key in keys]
+
+
+async def test_reports_queue(env, make_token) -> None:
+    client, pool = env
+    admin = await make_user(pool, "admin", "Admin")
+    athlete = await make_user(pool, "athlete", "Kofi Asante")
+    reporter = await make_user(pool, "athlete", "Ama Reporter")
+    auth = {"Authorization": f"Bearer {make_token(admin)}"}
+    video_id = await pool.fetchval(
+        """insert into public.videos
+             (owner_id, title, status, share_to_feed, playback_key, poster_key)
+           values ($1, 'Match highlights', 'ready', true, 'v/r/720.mp4', 'v/r/p.jpg')
+           returning id""",
+        athlete,
+    )
+    await pool.execute(
+        """insert into public.reports (reporter_id, target_type, target_id, reason, details)
+           values ($1, 'video', $2, 'Not their clip', 'This is televised footage.')""",
+        reporter,
+        video_id,
+    )
+
+    r = await client.get("/v1/admin/reports", headers=auth)
+    assert r.status_code == 200, r.text
+    report = r.json()[0]
+    assert report["reason"] == "Not their clip"
+    assert report["subject"] == "Match highlights"
+    assert report["subject_owner"] == "Kofi Asante"
+    assert report["reporter_name"] == "Ama Reporter"
+    assert report["playback_url"].endswith("v/r/720.mp4")
+    assert report["reports_on_subject"] == 1
+
+    r = await client.post(
+        f"/v1/admin/reports/{report['id']}/decision",
+        headers=auth,
+        json={"status": "dismissed", "note": "The athlete is in the clip."},
+    )
+    assert r.status_code == 200 and r.json()["status"] == "dismissed"
+    still_open = await client.get("/v1/admin/reports", headers=auth, params={"status": "open"})
+    assert still_open.json() == []
+
+    athlete_token = {"Authorization": f"Bearer {make_token(athlete)}"}
+    assert (await client.get("/v1/admin/reports", headers=athlete_token)).status_code == 403
+
+
+async def test_delete_my_own_account(env, make_token, fake_r2) -> None:
+    client, pool = env
+    athlete = await make_user(pool, "athlete", "Leaving Soon")
+    await pool.execute(
+        """insert into public.videos (owner_id, title, status, share_to_feed, raw_key, playback_key,
+                                      poster_key)
+           values ($1, 'Clip', 'ready', true, 'raw/me', 'v/me/720.mp4', 'v/me/poster.jpg')""",
+        athlete,
+    )
+
+    assert (await client.delete("/v1/me")).status_code == 401
+
+    r = await client.delete("/v1/me", headers={"Authorization": f"Bearer {make_token(athlete)}"})
+    assert r.status_code == 204
+    assert await pool.fetchval("select count(*) from auth.users where id = $1", athlete) == 0
+    left = await pool.fetchval("select count(*) from public.videos where owner_id = $1", athlete)
+    assert left == 0
+    deleted_keys = [key for _, keys in fake_r2 for key in keys]
+    assert "raw/me" in deleted_keys and "v/me/720.mp4" in deleted_keys

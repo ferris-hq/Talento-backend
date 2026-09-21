@@ -1,10 +1,17 @@
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
 
+from anyio import to_thread
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+
+from app.config import Settings, get_settings
 from app.db import DbConnection
 from app.deps.auth import CurrentUser
 from app.schemas.profile import AthleteSummary, CoachSummary, Me
+from app.services import cdn, storage
 
 router = APIRouter(prefix="/v1", tags=["me"])
+
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 ME_QUERY = """
 select p.id, p.role::text as role, p.full_name, p.avatar_key, p.region, p.city, p.sport,
@@ -66,3 +73,29 @@ async def read_me(user: CurrentUser, db: DbConnection) -> Me:
         athlete=athlete,
         coach=coach,
     )
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_me(user: CurrentUser, db: DbConnection, settings: SettingsDep) -> Response:
+    """Deletes the signed-in account and every file that belongs to it. There is no undo."""
+    videos = await db.fetch(
+        "select raw_key, playback_key, poster_key from public.videos where owner_id = $1", user.id
+    )
+    flyers = await db.fetch(
+        "select flyer_key from public.trials where created_by = $1 and flyer_key is not null",
+        user.id,
+    )
+    # Everything the account owns hangs off auth.users by "on delete cascade".
+    deleted = await db.fetchval("delete from auth.users where id = $1 returning id", user.id)
+    if deleted is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
+
+    media = [key for v in videos for key in (v["playback_key"], v["poster_key"]) if key]
+    media += [f["flyer_key"] for f in flyers]
+    raw = [v["raw_key"] for v in videos if v["raw_key"]]
+    if raw:
+        await to_thread.run_sync(storage.delete_objects, settings.r2_bucket_raw, raw)
+    if media:
+        await to_thread.run_sync(storage.delete_objects, settings.r2_bucket_media, media)
+        await cdn.purge([storage.public_url(key) for key in media], settings)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

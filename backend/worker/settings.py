@@ -3,11 +3,13 @@
 import logging
 import os
 
+from arq import cron
 from arq.connections import RedisSettings
 
 from app.config import get_settings
 from app.db import create_pool
 from worker.analysis import analyze_video
+from worker.push import send_pending_pushes
 from worker.tasks import process_video
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -26,6 +28,10 @@ async def shutdown(ctx: dict) -> None:
 
 class WorkerSettings:
     functions = [process_video, analyze_video]  # noqa: RUF012 - arq reads class attributes
+    # Notifications are written by the database; this sweeps them out to devices every 20s.
+    cron_jobs = [  # noqa: RUF012
+        cron(send_pending_pushes, second={0, 20, 40}, run_at_startup=True, max_tries=1)
+    ]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

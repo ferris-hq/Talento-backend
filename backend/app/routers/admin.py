@@ -588,3 +588,120 @@ async def takedown_video(
         await to_thread.run_sync(storage.delete_objects, settings.r2_bucket_media, media)
         await cdn.purge([storage.public_url(key) for key in media], settings)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------------------------
+# reports
+# ---------------------------------------------------------------------------------------------
+
+
+class ReportOut(BaseModel):
+    id: UUID
+    target_type: str
+    target_id: UUID
+    reason: str
+    details: str | None
+    status: str
+    created_at: dt.datetime
+    reporter_name: str | None
+    reporter_id: UUID | None
+    # what was reported, resolved for whichever kind it is
+    subject: str | None
+    subject_owner: str | None
+    subject_owner_id: UUID | None
+    playback_url: str | None
+    poster_url: str | None
+    reports_on_subject: int
+    review_note: str | None
+    reviewed_at: dt.datetime | None
+
+
+REPORTS_QUERY = """
+select r.id, r.target_type::text as target_type, r.target_id, r.reason, r.details,
+       r.status::text as status, r.created_at, r.review_note, r.reviewed_at,
+       r.reporter_id, reporter.full_name as reporter_name,
+       case r.target_type
+         when 'video' then v.title
+         when 'trial' then t.title
+         else subject_profile.full_name
+       end as subject,
+       case r.target_type
+         when 'video' then owner.full_name
+         when 'trial' then coach.full_name
+         else subject_profile.full_name
+       end as subject_owner,
+       case r.target_type
+         when 'video' then v.owner_id
+         when 'trial' then t.created_by
+         else subject_profile.id
+       end as subject_owner_id,
+       v.playback_key, v.poster_key,
+       (select count(*) from public.reports other
+         where other.target_type = r.target_type
+           and other.target_id = r.target_id) as reports_on_subject
+  from public.reports r
+  left join public.profiles reporter on reporter.id = r.reporter_id
+  left join public.videos v on r.target_type = 'video' and v.id = r.target_id
+  left join public.profiles owner on owner.id = v.owner_id
+  left join public.trials t on r.target_type = 'trial' and t.id = r.target_id
+  left join public.profiles coach on coach.id = t.created_by
+  left join public.profiles subject_profile
+         on r.target_type = 'profile' and subject_profile.id = r.target_id
+ where ($1::text is null or r.status::text = $1)
+ order by r.status = 'open' desc, r.created_at desc
+ limit $2
+"""
+
+
+@router.get("/reports", response_model=list[ReportOut])
+async def list_reports(
+    admin: AdminId,
+    db: DbConnection,
+    report_status: Annotated[
+        Literal["open", "actioned", "dismissed"] | None, Query(alias="status")
+    ] = None,
+) -> list[ReportOut]:
+    """The moderation queue: what people reported, open first."""
+    rows = await db.fetch(REPORTS_QUERY, report_status, PAGE)
+    return [
+        ReportOut(
+            **{k: v for k, v in dict(row).items() if k not in MEDIA_KEYS},
+            playback_url=storage.public_url(row["playback_key"]),
+            poster_url=storage.public_url(row["poster_key"]),
+        )
+        for row in rows
+    ]
+
+
+class ReportDecision(BaseModel):
+    status: Literal["actioned", "dismissed"]
+    note: str | None = Field(default=None, max_length=300)
+
+
+@router.post("/reports/{report_id}/decision", response_model=ReportOut)
+async def decide_report(
+    report_id: UUID, body: ReportDecision, admin: AdminId, db: DbConnection
+) -> ReportOut:
+    """Closes a report. Acting on the content itself (take-down, suspension) is separate."""
+    updated = await db.fetchval(
+        """update public.reports
+              set status = $2::public.report_status, review_note = $3,
+                  reviewed_by = $4::uuid, reviewed_at = now()
+            where id = $1
+        returning id""",
+        report_id,
+        body.status,
+        body.note,
+        admin,
+    )
+    if updated is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found")
+    one = REPORTS_QUERY.replace(
+        "where ($1::text is null or r.status::text = $1)", "where r.id = $1::uuid"
+    )
+    row = await db.fetchrow(one, str(report_id), 1)
+    return ReportOut(
+        **{k: v for k, v in dict(row).items() if k not in MEDIA_KEYS},
+        playback_url=storage.public_url(row["playback_key"]),
+        poster_url=storage.public_url(row["poster_key"]),
+    )
