@@ -49,6 +49,7 @@ class Overview(BaseModel):
     open_trials: int
     applications_pending: int
     signups_7d: int
+    open_reports: int
 
 
 @router.get("/overview", response_model=Overview)
@@ -68,7 +69,8 @@ async def overview(admin: AdminId, db: DbConnection) -> Overview:
           (select count(*) from public.trial_applications
             where status = 'pending') as applications_pending,
           (select count(*) from auth.users
-            where created_at > now() - interval '7 days') as signups_7d
+            where created_at > now() - interval '7 days') as signups_7d,
+          (select count(*) from public.reports where status = 'open') as open_reports
         """
     )
     return Overview(**dict(row))
