@@ -707,3 +707,171 @@ async def decide_report(
         playback_url=storage.public_url(row["playback_key"]),
         poster_url=storage.public_url(row["poster_key"]),
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# analytics
+# ---------------------------------------------------------------------------------------------
+
+
+class SeriesPoint(BaseModel):
+    day: dt.date
+    athletes: int
+    coaches: int
+    clips: int
+    applications: int
+
+
+class NamedCount(BaseModel):
+    label: str
+    count: int
+
+
+class Analytics(BaseModel):
+    days: int
+    # one row per day, oldest first, with empty days filled in
+    series: list[SeriesPoint]
+    # how clips scored, in whole-number rating bands
+    ratings: list[NamedCount]
+    applications_by_status: list[NamedCount]
+    regions: list[NamedCount]
+    positions: list[NamedCount]
+    # headline numbers for the period, each with the previous period to compare against
+    signups: int
+    signups_before: int
+    clips: int
+    clips_before: int
+    applications: int
+    applications_before: int
+    accepted: int
+    accepted_before: int
+    # how far coaches get through verification
+    coaches_unverified: int
+    coaches_pending: int
+    coaches_verified: int
+    # quality of what athletes upload
+    clips_rated: int
+    clips_unrated: int
+    average_rating: float | None
+
+
+ANALYTICS_QUERY = """
+with bounds as (
+  select (current_date - ($1::int - 1))::date as start_day,
+         (current_date - ($1::int * 2 - 1))::date as prev_start_day
+),
+days as (
+  select generate_series((select start_day from bounds), current_date,
+                         interval '1 day')::date as day
+)
+select
+  d.day,
+  (select count(*) from public.profiles p
+    where p.created_at::date = d.day and p.role = 'athlete') as athletes,
+  (select count(*) from public.profiles p
+    where p.created_at::date = d.day and p.role = 'coach') as coaches,
+  (select count(*) from public.videos v
+    where v.created_at::date = d.day and not v.is_draft) as clips,
+  (select count(*) from public.trial_applications a
+    where a.created_at::date = d.day) as applications
+from days d
+order by d.day
+"""
+
+
+@router.get("/analytics", response_model=Analytics)
+async def analytics(
+    admin: AdminId,
+    db: DbConnection,
+    days: Annotated[int, Query(ge=7, le=90)] = 30,
+) -> Analytics:
+    """Everything the dashboard charts: a daily series, a few breakdowns, and period totals."""
+    rows = await db.fetch(ANALYTICS_QUERY, days)
+
+    totals = await db.fetchrow(
+        """
+        with bounds as (
+          select (current_date - ($1::int - 1))::date as start_day,
+                 (current_date - ($1::int * 2 - 1))::date as prev_start_day
+        )
+        select
+          (select count(*) from public.profiles
+            where created_at::date >= (select start_day from bounds)) as signups,
+          (select count(*) from public.profiles
+            where created_at::date >= (select prev_start_day from bounds)
+              and created_at::date < (select start_day from bounds)) as signups_before,
+          (select count(*) from public.videos
+            where created_at::date >= (select start_day from bounds) and not is_draft) as clips,
+          (select count(*) from public.videos
+            where created_at::date >= (select prev_start_day from bounds)
+              and created_at::date < (select start_day from bounds)
+              and not is_draft) as clips_before,
+          (select count(*) from public.trial_applications
+            where created_at::date >= (select start_day from bounds)) as applications,
+          (select count(*) from public.trial_applications
+            where created_at::date >= (select prev_start_day from bounds)
+              and created_at::date < (select start_day from bounds)) as applications_before,
+          (select count(*) from public.trial_applications
+            where status = 'accepted'
+              and decided_at::date >= (select start_day from bounds)) as accepted,
+          (select count(*) from public.trial_applications
+            where status = 'accepted'
+              and decided_at::date >= (select prev_start_day from bounds)
+              and decided_at::date < (select start_day from bounds)) as accepted_before,
+          (select count(*) from public.coach_profiles
+            where verification_status = 'unverified') as coaches_unverified,
+          (select count(*) from public.coach_profiles
+            where verification_status = 'pending') as coaches_pending,
+          (select count(*) from public.coach_profiles
+            where verification_status = 'verified') as coaches_verified,
+          (select count(*) from public.videos where rating is not null) as clips_rated,
+          (select count(*) from public.videos
+            where rating is null and status = 'ready' and not is_draft) as clips_unrated,
+          (select round(avg(rating), 1) from public.videos
+            where rating is not null) as average_rating
+        """,
+        days,
+    )
+
+    ratings = await db.fetch(
+        """
+        select width_bucket(rating, 0, 10, 5) as bucket, count(*) as count
+          from public.videos where rating is not null
+         group by bucket order by bucket
+        """
+    )
+    bucket_labels = {1: "0-2", 2: "2-4", 3: "4-6", 4: "6-8", 5: "8-10", 6: "10"}
+
+    by_status = await db.fetch(
+        """
+        select status::text as label, count(*) as count
+          from public.trial_applications group by status order by count desc
+        """
+    )
+    regions = await db.fetch(
+        """
+        select coalesce(nullif(region, ''), 'Not set') as label, count(*) as count
+          from public.profiles where role = 'athlete'
+         group by 1 order by count desc, label limit 6
+        """
+    )
+    positions = await db.fetch(
+        """
+        select coalesce(nullif(ap.position, ''), 'Not set') as label, count(*) as count
+          from public.athlete_profiles ap
+         group by 1 order by count desc, label limit 6
+        """
+    )
+
+    return Analytics(
+        days=days,
+        series=[SeriesPoint(**dict(row)) for row in rows],
+        ratings=[
+            NamedCount(label=bucket_labels.get(row["bucket"], "?"), count=row["count"])
+            for row in ratings
+        ],
+        applications_by_status=[NamedCount(**dict(row)) for row in by_status],
+        regions=[NamedCount(**dict(row)) for row in regions],
+        positions=[NamedCount(**dict(row)) for row in positions],
+        **dict(totals),
+    )

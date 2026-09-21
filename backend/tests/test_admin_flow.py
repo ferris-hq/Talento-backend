@@ -289,3 +289,62 @@ async def test_delete_my_own_account(env, make_token, fake_r2) -> None:
     assert left == 0
     deleted_keys = [key for _, keys in fake_r2 for key in keys]
     assert "raw/me" in deleted_keys and "v/me/720.mp4" in deleted_keys
+
+
+async def test_analytics(env, make_token) -> None:
+    client, pool = env
+    admin = await make_user(pool, "admin", "Admin")
+    athlete = await make_user(pool, "athlete", "Kofi Asante")
+    coach = await make_user(pool, "coach", "Coach Kwesi")
+    auth = {"Authorization": f"Bearer {make_token(admin)}"}
+    await pool.execute("update public.profiles set region = 'Ashanti' where id = $1", athlete)
+    await pool.execute(
+        "update public.athlete_profiles set position = 'Winger' where profile_id = $1", athlete
+    )
+    await pool.execute(
+        """insert into public.videos (owner_id, title, status, share_to_feed, rating, ready_at)
+           values ($1, 'Rated clip', 'ready', true, 7.4, now()),
+                  ($1, 'Unrated clip', 'ready', true, null, now())""",
+        athlete,
+    )
+    trial_id = uuid4()
+    await pool.execute(
+        """insert into public.trials (id, created_by, club_name, title, sport, venue, trial_date,
+                                      application_deadline)
+           values ($1, $2, 'Accra Lions', 'Open day', 'football', 'Accra', $3, $4)""",
+        trial_id,
+        coach,
+        TODAY + dt.timedelta(days=10),
+        TODAY + dt.timedelta(days=5),
+    )
+    await pool.execute(
+        "insert into public.trial_applications (trial_id, athlete_id) values ($1, $2)",
+        trial_id,
+        athlete,
+    )
+
+    r = await client.get("/v1/admin/analytics", headers=auth, params={"days": 30})
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    assert len(body["series"]) == 30, "one point per day, empty days included"
+    today = body["series"][-1]
+    assert today["athletes"] >= 1 and today["coaches"] >= 1
+    assert today["clips"] == 2 and today["applications"] == 1
+
+    assert body["signups"] >= 3 and body["clips"] == 2 and body["applications"] == 1
+    assert body["clips_rated"] == 1 and body["clips_unrated"] == 1
+    assert body["average_rating"] == 7.4
+    assert body["coaches_pending"] >= 1
+
+    labels = {row["label"] for row in body["ratings"]}
+    assert "6-8" in labels, "a 7.4 clip lands in the 6-8 band"
+    assert {"Ashanti"} <= {row["label"] for row in body["regions"]}
+    assert {"Winger"} <= {row["label"] for row in body["positions"]}
+    assert {"pending"} <= {row["label"] for row in body["applications_by_status"]}
+
+    # the window is bounded, and non-admins can't see any of it
+    too_long = await client.get("/v1/admin/analytics", headers=auth, params={"days": 500})
+    assert too_long.status_code == 422
+    athlete_token = {"Authorization": f"Bearer {make_token(athlete)}"}
+    assert (await client.get("/v1/admin/analytics", headers=athlete_token)).status_code == 403
