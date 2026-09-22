@@ -31,9 +31,9 @@ distance). Re-run any time with `scripts/loadtest.py --users 50 --seconds 45`.
 2. **There is no admin account.** Nobody can approve coaches, so nobody can post trials. Create
    one, then: `update public.profiles set role = 'admin' where id = '<user id>';`
 
-3. **Supabase Site URL is still `http://localhost:3000`.** Password-reset and confirmation links
-   will point at localhost. Set it to the app scheme / production URL in
-   Authentication → URL Configuration.
+3. ~~**Supabase Site URL is still `http://localhost:3000`.**~~ Done: it is now
+   `https://talentoafrica.com`, and the redirect allow-list already carries `talento://**` and
+   `exp://**` for the app's own deep links.
 
 4. **Sentry has no DSN.** `SENTRY_DSN` is empty in `/opt/talento/.env`, so errors are only in
    `docker logs`. Create a project at sentry.io, paste the DSN in, and redeploy. Free tier is
@@ -42,10 +42,12 @@ distance). Re-run any time with `scripts/loadtest.py --users 50 --seconds 45`.
 5. **Leaked-password protection is off.** Supabase can check new passwords against
    HaveIBeenPwned. Turn it on in Authentication → Providers → Email. One toggle.
 
-6. **Privacy policy and terms need to be published** at real URLs before either store will take
-   a submission. The policy is written: `Talento/docs/privacy-policy.md`. It has three
-   placeholders (company name and address, Data Protection Commission registration, and who is
-   responsible for data protection).
+6. **Privacy policy and terms are published**, at
+   https://talento-web-ferris-hqs-projects.vercel.app/privacy and `/terms` (source in the
+   `Talento-web` repo). Two things remain: point `talentoafrica.com` at that Vercel project so
+   the URLs sit on your own domain, and replace the visible "Before launch" note on both pages
+   with the registered company name and address, the Data Protection Commission registration
+   number, and who is responsible for data protection.
 
 7. **Register with Ghana's Data Protection Commission** under the Data Protection Act, 2012
    (Act 843). Required to process personal data, and the policy references it.
