@@ -15,6 +15,7 @@ healthy once it's out.
 | Storage | Cloudflare R2, `media.talentoafrica.com` | raw / media / private buckets |
 | Email | Resend through Supabase SMTP | `noreply@talentoafrica.com`; inbound forwards to the team |
 | Admin dashboard | Not hosted yet | Runs locally; Cloudflare Pages or Vercel when wanted |
+| Website | Vercel, `talentoafrica.com` | Next.js; privacy and terms live here |
 
 **Measured capacity**: 50 concurrent callers sustained **325 requests/second** with no failures
 and a p95 of about 200 ms (including ~120 ms of network latency from Accra-to-Frankfurt
@@ -42,12 +43,12 @@ distance). Re-run any time with `scripts/loadtest.py --users 50 --seconds 45`.
 5. **Leaked-password protection is off.** Supabase can check new passwords against
    HaveIBeenPwned. Turn it on in Authentication → Providers → Email. One toggle.
 
-6. **Privacy policy and terms are published**, at
-   https://talento-web-ferris-hqs-projects.vercel.app/privacy and `/terms` (source in the
-   `Talento-web` repo). Two things remain: point `talentoafrica.com` at that Vercel project so
-   the URLs sit on your own domain, and replace the visible "Before launch" note on both pages
-   with the registered company name and address, the Data Protection Commission registration
-   number, and who is responsible for data protection.
+6. ~~**Privacy policy and terms are published**~~ Done: they are live on our own domain, at
+   https://talentoafrica.com/privacy and `/terms` (source in the `Talento-web` repo, a Next.js
+   site on Vercel; DNS at Cloudflare, `www` redirects to the apex). One thing remains: replace
+   the visible "Before launch" note on both pages with the registered company name and address,
+   the Data Protection Commission registration number, and who is responsible for data
+   protection.
 
 7. **Register with Ghana's Data Protection Commission** under the Data Protection Act, 2012
    (Act 843). Required to process personal data, and the policy references it.
